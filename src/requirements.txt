@@ -1,5 +1,5 @@
-opencv-python==4.9.0.80
 apriltag==0.0.16
-numpy==1.26.3
 tensorrt
 pycuda
+numpy==1.17.4
+opencv-contrib-python==4.4.*
