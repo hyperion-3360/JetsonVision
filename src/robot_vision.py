@@ -1,11 +1,12 @@
 import argparse
+import os
 import apriltag
-from ai import trt_demo as trt
 from pathlib import Path
+from matplotlib import pyplot as plt
 import numpy as np
 import threading
 import json
-from networktables import NetworkTables
+# from networktables import NetworkTables
 import queue
 import signal
 import cv2
@@ -18,10 +19,7 @@ def build_arg_parser():
     parser = argparse.ArgumentParser(description="Hyperion 3360 Chargedup 2023 vision application")
 
     #do we want gui output
-    parser.add_argument("-g", "--gui", dest='gui', action='store_true', help="display AR feed from camera with optional AprilTag detection and or AI")
-
-    #do we want AI
-    parser.add_argument("--ai", dest='ai', action='store_true', help="enable object detection")
+    parser.add_argument("-g", "--gui", dest='gui', action='store_true', help="display AR feed from camera with optional AprilTag detection")
 
     #do we want AprilTag
     parser.add_argument("--apriltag", dest='apriltag', action='store_true', help="enable apriltag detection")
@@ -65,40 +63,6 @@ def build_arg_parser():
     return parser
 
 ################################################################################
-# AI model initialization and load in GPU
-# Build the engine if the .trt model file doesn't exist
-# Warmup the model
-# Load the categories
-################################################################################
-def init_AI(args):
-    precision = "float16" if args.fp16 else "float32"
-
-    # Load categories
-    categories = trt.load_labels(args.labels)
-
-    if not args.trt and args.onnx:
-        args.trt = str(Path(args.onnx).with_suffix(".trt"))
-
-    # Model input has dynamic shape but we still need to specify an optimization
-    # profile for TensorRT
-    opt_size = tuple((args.height, args.width))
-
-    if not Path(args.trt).exists():
-        # Export TensorRT engine
-        trt.export_tensorrt_engine(
-            args.onnx,
-            args.trt,
-            opt_size=opt_size,
-            precision=precision,
-        )
-
-    # TensorRT inference
-    model = trt.YOLOXTensorRT(args.trt, precision=precision, input_shape=[args.height, args.width])
-    model.warmup(n=args.warmup)
-
-    return model, categories
-
-################################################################################
 # April tag subsystme initialization
 # Open an parse the game environment JSON
 # Open an parse the camera fundamental parameters
@@ -125,7 +89,7 @@ def init_april_tag(args):
 # Push the values in specific sections of network tables
 ################################################################################
 def communication_thread(message_q):
-
+    return
     notified = [False]
 
     cond = threading.Condition()
@@ -176,11 +140,12 @@ def communication_thread(message_q):
 # Initialize networktables
 ################################################################################
 def init_network_tables(args):
-    msg_q = queue.Queue()
-    NetworkTables.initialize(args.rio_ip)
-    comm_thread = threading.Thread(target=communication_thread, args=(msg_q, ), daemon=True)
+    # msg_q = queue.Queue()
+    # NetworkTables.initialize(args.rio_ip)
+    # comm_thread = threading.Thread(target=communication_thread, args=(msg_q, ), daemon=True)
 
-    return comm_thread, msg_q
+    # return comm_thread, msg_q
+    ...
 
 ################################################################################
 # Base on the detector results computes the absolute global position and
@@ -189,7 +154,7 @@ def init_network_tables(args):
 ################################################################################
 def process_april_tag_detection( camera_params, detector, result, tag_info ):
 
-    # using the hamming==0 removes false detections that are frequent in the 
+    # using the hamming==0 removes false detections that are frequent in the
     # tag16h5 tag family
     if result.tag_id in tag_info.keys() and result.hamming == 0:
 
@@ -307,7 +272,7 @@ def draw_object_detections(frame, predictions):
         cv2.rectangle( frame, (absx1, absy1), (absx2, absy2), (255,0,0), 5)
 
 ################################################################################
-# This is the main vision processing loop, it reads frames from camera and 
+# This is the main vision processing loop, it reads frames from camera and
 # process april tags and AI detection
 ################################################################################
 def vision_processing(kwargs):
@@ -315,9 +280,9 @@ def vision_processing(kwargs):
     cap = kwargs['camera']
     camera_params = kwargs['camera_params']
     tag_info = kwargs['tag_info']
-    msg_q = kwargs['comm_msg_q']
+    # msg_q = kwargs['comm_msg_q']
 
-    ai_model = kwargs['model']
+    # ai_model = kwargs['model']
 
     dist_coeffs = np.array(camera_params['dist'])
     fc = camera_params['params']
@@ -325,8 +290,8 @@ def vision_processing(kwargs):
 
     precision = "float16" if args.fp16 else "float32"
 
-    options = apriltag.DetectorOptions( families='tag16h5',
-                                        debug=False, 
+    options = apriltag.DetectorOptions( families='tag36h11',
+                                        debug=False,
                                         refine_decode=True,
                                         refine_pose=True)
     detector = apriltag.Detector(options)
@@ -337,39 +302,30 @@ def vision_processing(kwargs):
 
         #if we have a good frame from the camera
         if ret:
+            detect_notes(frame)
 
             if args.apriltag:
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
 
-                if pos is not None:
-                    msg_q.put({'april_tag':(pos, angles)})
-
-            if args.ai:
-                image = trt.convert_to_nchw(frame, dtype=precision)
-                image = image.astype(np.uint8)
-                predictions = ai_model(image)
-                for p in predictions:
-                    c, s, x1, y1, x2, y2  = p
-                    cat = kwargs['categories'][int(c)]
-                    msg_q.put({'detection':(cat,s) + normalized_to_absolute(x1,y1,x2,y2, args.width, args.height)})
+                # if pos is not None:
+                #     msg_q.put({'april_tag':(pos, angles)})
 
             if args.gui:
                 if args.apriltag:
                     draw_april_tags(frame, tag_detections)
-                if args.ai:
-                    draw_object_detections(frame, predictions)
+
                 # show the output image after AprilTag detection
-                cv2.imshow("Image", frame)
-                cv2.waitKey(10)
+                # cv2.imshow("Image", frame)
+                cv2.waitKey(1)
 
     if args.gui:
         cv2.destroyAllWindows()
 
-    msg_q.put({'command':'stop'})
+    # msg_q.put({'command':'stop'})
 
 ################################################################################
-# setup the camera capture parameter, this version is a simple convenience 
-# function but a much more elaborate gstreamer pipeline could be used with 
+# setup the camera capture parameter, this version is a simple convenience
+# function but a much more elaborate gstreamer pipeline could be used with
 # a CSI camera based on nvargus
 ################################################################################
 def setup_capture(dev, w, h):
@@ -377,6 +333,106 @@ def setup_capture(dev, w, h):
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
     return cap
+
+def ref_circle(radius):
+    radius = round(radius)
+    canva = np.zeros((radius*2, radius*2), dtype=np.uint8)
+    canva = cv2.circle(canva, (radius, radius), radius, 255, 1)
+
+    return np.asarray(list(zip(*np.where(canva == 255))))
+
+
+def detect_notes(frame):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Threshold of orange in HSV space
+    lower_orange = np.array([0, 120, 200])
+    upper_orange = np.array([25, 255, 255])
+
+    # preparing the mask to overlay
+    mask = cv2.inRange(hsv, lower_orange, upper_orange)
+
+    # The black region in the mask has the value of 0,
+    # so when multiplied with original image removes all non-blue regions
+    color_masked = cv2.bitwise_and(frame, frame, mask = mask)
+
+    _, gray, _ = cv2.split(color_masked)
+
+    # gray[np.where(gray > 0)] = 255
+
+    kernel = np.ones((5, 5), np.uint8)
+    gray = cv2.dilate(gray, kernel, iterations=2)
+    # gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+    # gray = cv2.GaussianBlur( gray, (9, 9), 2, 2 )
+
+    cv2.imshow("masked", color_masked)
+    cv2.imshow("gray", gray)
+
+
+######### METHOD 1 ##########
+    # # Try to fit contours into an ellipse
+    # possible_ellipses = []
+    # for cnt in cnts:
+    #     cnt = cnt.reshape(-1, 2)
+    #     center, size, rot = cv2.fitEllipse(cnt.reshape(-1, 2))
+
+    #     rot = np.floor(rot) % 90 # L'ellipse de la note ne devrait pas avoir une boite englobante en rotation
+    #     if rot != 0:
+    #         continue
+
+    #     width = size[0]
+    #     height = size[1]
+
+    #     # We assume the detected elipse should be approximatly a circle
+    #     mean_radius = (height/2) + (np.power(width, 2)/(8*height))
+    #     if mean_radius < 50: # rayon min de 50px...
+    #         continue
+
+    #     circle = ref_circle(mean_radius)
+    #     print(f"radius: {mean_radius}")
+    #     score = cv2.matchShapes(cnt, circle, cv2.CONTOURS_MATCH_I1, 0.0)
+
+    #     if score < 10:
+    #         possible_ellipses.append((center, mean_radius))
+
+    #     print(f"score: {score}")
+    #     print("-----")
+    #
+    # # top left and bottom right corners
+    # for s in possible_ellipses:
+    #     x, y = s[0]
+    #     r = s[1]
+
+    #     frame = cv2.rectangle(frame, np.round((x-r, y+r)).astype(np.int16), np.round((x+r, y-r)).astype(np.int16), (0, 255, 0), 1)
+
+    # cv2.imshow("detected", frame)
+
+######### METHOD 2 ##########
+    # canny = cv2.Canny(gray, 100, 200)
+    # cv2.imshow("canny", canny)
+
+    # gray = cv2.GaussianBlur( gray, (9, 9), 2, 2 )
+    # cv2.imshow("blurred", gray)
+
+    # f = np.fft.fft2(gray)
+    # fshift = np.fft.fftshift(f)
+    # magnitude_spectrum = 20*np.log(np.abs(fshift))
+    # plt.subplot(121),plt.imshow(gray, cmap = 'gray')
+    # plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+    # plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
+    # plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+
+    # circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, gray.shape[1], 100, 100, 200)
+
+    # if circles is not None:
+    #     circles = np.round(circles[0]).astype(np.int16)
+    #     if circles.shape != (1,):
+    #         for circle in circles:
+    #             cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), -1)
+    # cv2.imshow("circles", frame)
+
+    # plt.show()
+    cv2.waitKey(0)
 
 ################################################################################
 def main():
@@ -397,22 +453,27 @@ def main():
 
     kwargs['args'] = args
 
-    if args.ai:
-        kwargs['model'], kwargs['categories'] = init_AI(args)
-
     if args.apriltag:
         kwargs['tag_info'],kwargs['camera_params'] = init_april_tag(args)
 
     kwargs['camera'] = setup_capture(args.device, args.width, args.height)
 
-    comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
+    # comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
 
-    comm_thread.start()
+    # comm_thread.start()
 
-    vision_processing(kwargs)
+    if args.apriltag:
+        vision_processing(kwargs)
 
-    comm_thread.join()
+    # comm_thread.join()
+
+    if kwargs['camera'] is not None and kwargs['camera'].isOpened():
+        kwargs['camera'].release()
 
 #--------------------------------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    # main()
+
+    for file in os.listdir('notes'):
+        f = cv2.imread(f'notes/{file}')
+        detect_notes(f)

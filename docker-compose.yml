@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  vision-srv:
+    build:
+      context: .
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 0s
+        window: 10s
