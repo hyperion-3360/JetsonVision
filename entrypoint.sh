@@ -1,0 +1,1 @@
+python src/robot_vision.py 0 --apriltag -e src/env.json -c src/camera.json --gui
