@@ -12,7 +12,6 @@ def ref_circle(radius):
 
     return np.asarray(list(zip(*np.where(canva == 255))))
 
-
 def detect_notes(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -31,7 +30,7 @@ def detect_notes(frame):
 
     kernel = np.ones((5, 5), np.uint8)
     gray = cv2.dilate(gray, kernel, iterations=2)
-    gray[np.where(gray > 0)] = 255
+    # gray[np.where(gray > 0)] = 255
 
     # gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
     # gray = cv2.GaussianBlur( gray, (9, 9), 2, 2 )
