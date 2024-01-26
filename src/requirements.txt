@@ -3,3 +3,5 @@ tensorrt
 pycuda
 numpy==1.17.4
 opencv-contrib-python==4.4.*
+python3-pil.imagetk
+python3-tk
