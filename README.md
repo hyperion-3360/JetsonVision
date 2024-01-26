@@ -1,3 +1,6 @@
+## Static IP addresses of teledyne cameras
+Camera 2: 169.254.2.146
+
 ## Steps to build and execute a docker image in a Jetson for AI and image processing
 
 ### Build the image
