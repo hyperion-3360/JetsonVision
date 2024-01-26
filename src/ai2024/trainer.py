@@ -1,27 +1,18 @@
-#! usr/bin/python3
 import argparse
-import os
+
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.optim as optim
-from torchvision import transforms
+from yolo import DetectionNetwork, LocalizationLoss
 from preprocesser import preprocess
 from cocoloader import CocoLoader
 
-from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
+from metrics import MeanAveragePrecisionMetric
 from visualizer import Visualizer
 
-from models.classification_network import Classifier
-from models.detection_network import Detection, LocalizationLoss
-from models.segmentation_network import Segmentation
-
-CLASS_PROBABILITY_THRESHOLD = 0.5
 INTERSECTION_OVER_UNION_THRESHOLD = 0.5
 CONFIDENCE_THRESHOLD = 0.5
-SEGMENTATION_BACKGROUND_CLASS = 3
-
 
 train_set, val_set, test_set = CocoLoader.generate_datasets(
             Path('/Users/andlat/Documents/FIRST2024/COCO dataset/FRC2024/'),
@@ -39,21 +30,21 @@ class CnnTrainer:
         # torch.manual_seed(seed)
 
         # Initialisation du model et des classes pour l'entraînement
-        self._model = self._create_model(self._args.task).to(self._device)
-        self._criterion = self._create_criterion(self._args.task)
+        self._model = self._create_model().to(self._device)
+        self._criterion = self._create_criterion()
 
         print('Model : ')
         print(self._model)
         print('\nNumber of parameters in the model : ', sum(p.numel() for p in self._model.parameters()))
 
-    def _create_model(self, task):
-        ...
+    def _create_model(self):
+        return DetectionNetwork()
 
-    def _create_criterion(self, task):
+    def _create_criterion(self):
         return LocalizationLoss()
         # return torch.nn.MSELoss(reduction="sum")
 
-    def _create_metric(self, task):
+    def _create_metric(self):
         return MeanAveragePrecisionMetric(3, INTERSECTION_OVER_UNION_THRESHOLD)
 
     def test(self):
@@ -76,8 +67,7 @@ class CnnTrainer:
                 boxes = boxes.to(self._device)
                 class_labels = class_labels.to(self._device)
 
-                loss = self._test_batch(self._args.task, self._model, self._criterion, test_metric,
-                                        image, segmentation_target, boxes, class_labels)
+                loss = self._test_batch(self._model, self._criterion, test_metric, image, boxes)
                 test_loss += loss.item()
 
         test_loss /= len(test_set)
@@ -125,8 +115,8 @@ class CnnTrainer:
                 boxes = boxes.to(self._device)
                 class_labels = class_labels.to(self._device)
 
-                loss = self._train_batch(self._args.task, self._model, self._criterion, train_metric, optimizer,
-                                         image, segmentation_target, boxes, class_labels)
+                loss = self._train_batch(self._model, self._criterion, train_metric, optimizer,
+                                         image, boxes)
 
                 train_loss += loss.item()
 
@@ -177,7 +167,7 @@ class CnnTrainer:
         if ans == 'y':
             self.test()
 
-    def _train_batch(self, task, model, criterion, metric, optimizer, image, segmentation_target, boxes, class_labels):
+    def _train_batch(self, model, criterion, metric, optimizer, image, boxes):
         """
         Méthode qui effectue une passe d'entraînement sur un lot de données.
         Vous devez appeler la méthode "accumulate" de l'objet "metric" pour que le calcul de la métrique se fasse.
@@ -193,8 +183,7 @@ class CnnTrainer:
         :param optimizer: L'optimisateur pour entraîner le modèle
         :param image: Le tenseur contenant les images du lot à passer au modèle
             Dimensions : (N, 1, H, W)
-        :param segmentation_target: Le tenseur cible pour la tâche de segmentation qui contient l'indice de la classe pour chaque pixel
-            Dimensions : (N, H, W)
+
         :param boxes: Le tenseur cible pour la tâche de détection:
             Dimensions: (N, 3, 5)
                 Si un 1 est présent à (i, j, 0), le vecteur (i, j, 0:5) représente un objet.
@@ -205,25 +194,10 @@ class CnnTrainer:
                     (i, j, 3) est la largeur normalisée et la hauteur normalisée de l'objet j de l'image i.
                     (i, j, 4) est l'indice de la classe de l'objet j de l'image i.
 
-        :param class_labels: Le tenseur cible pour la tâche de classification
-            Dimensions : (N, 3)
-                Si un 1 est présent à (i, 0), un cercle est présent dans l'image i.
-                Si un 0 est présent à (i, 0), aucun cercle n'est présent dans l'image i.
-                Si un 1 est présent à (i, 1), un triangle est présent dans l'image i.
-                Si un 0 est présent à (i, 1), aucun triangle n'est présent dans l'image i.
-                Si un 1 est présent à (i, 2), une croix est présente dans l'image i.
-                Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
 
-        # À compléter
-        target = None
-        if task == "classification":
-            target = class_labels
-        elif task == "detection":
-            target = boxes
-        elif task == "segmentation":
-            target = segmentation_target
+        target = boxes
 
         optimizer.zero_grad()
 
@@ -236,7 +210,7 @@ class CnnTrainer:
 
         return loss
 
-    def _test_batch(self, task, model, criterion, metric, image, segmentation_target, boxes, class_labels):
+    def _test_batch(self, model, criterion, metric, image, boxes):
         """
         Méthode qui effectue une passe de validation ou de test sur un lot de données.
         Vous devez appeler la méthode "accumulate" de l'objet "metric" pour que le calcul de la métrique se fasse.
@@ -251,8 +225,6 @@ class CnnTrainer:
         :param metric: La métrique créée dans create_metric
         :param image: Le tenseur PyTorch contenant les images du lot à passer au modèle
             Dimensions : (N, 1, H, W)
-        :param segmentation_target: Le tenseur PyTorch cible pour la tâche de segmentation qui contient l'indice de la classe pour chaque pixel
-            Dimensions : (N, H, W)
         :param boxes: Le tenseur PyTorch cible pour la tâche de détection:
             Dimensions: (N, 3, 5)
                 Si un 1 est présent à (i, j, 0), le vecteur (i, j, 0:5) représente un objet.
@@ -263,25 +235,9 @@ class CnnTrainer:
                     (i, j, 3) est la largeur normalisée et la hauteur normalisée de l'objet j de l'image i.
                     (i, j, 4) est l'indice de la classe de l'objet j de l'image i.
 
-        :param class_labels: Le tenseur PyTorch cible pour la tâche de classification
-            Dimensions : (N, 3)
-                Si un 1 est présent à (i, 0), un cercle est présent dans l'image i.
-                Si un 0 est présent à (i, 0), aucun cercle n'est présent dans l'image i.
-                Si un 1 est présent à (i, 1), un triangle est présent dans l'image i.
-                Si un 0 est présent à (i, 1), aucun triangle n'est présent dans l'image i.
-                Si un 1 est présent à (i, 2), une croix est présente dans l'image i.
-                Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
-
-        # À compléter
-        target = None
-        if task == "classification":
-            target = class_labels
-        elif task == "detection":
-            target = boxes
-        elif task == "segmentation":
-            target = segmentation_target
+        target = boxes
 
         output = model(image)
         loss = criterion(output, target)
@@ -294,9 +250,7 @@ class CnnTrainer:
 if __name__ == '__main__':
     #  Settings
     parser = argparse.ArgumentParser(description='Conveyor CNN')
-    parser.add_argument('--mode', choices=['train', 'test'], help='The script mode', required=True)
-    parser.add_argument('--task', choices=['classification', 'detection', 'segmentation'],
-                        help='The CNN task', required=True)
+    parser.add_argument('--mode', choices=['train', 'test'], help='The script mode', default="train")
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training and testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for training (default: 20)')
     parser.add_argument('--lr', type=float, default=4e-4, help='learning rate used for training (default: 4e-4)')

@@ -1,6 +1,3 @@
-import os
-os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
-
 from preprocesser import preprocess
 
 from torch.utils.data import Dataset

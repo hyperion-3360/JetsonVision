@@ -1,84 +1,98 @@
-# import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
-import numpy as np
-from torch.utils.data import Dataset
-import cv2
-from pycocotools.coco import COCO
+import torch
+from torch import nn
 
-from pathlib import Path
+class DetectionNetwork(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
 
-# class DetectionNetwork(nn.Module): #YOLO
-#     def __init__(self, num_classes=3, num_bbox=3):
-#         self.num_classes = 2
-#         self.num_bbox = num_bbox
-#         self.lambda_coord = 5
-#         self.lambda_noobj = 0.5
-#         super(DetectionNetwork, self).__init__()
+        self.num_classes = num_classes
 
-#         self.features = nn.Sequential( # input is 1x448x448
-#             nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3), # output: 64x224x224
-#             nn.LeakyReLU(),
-#             nn.MaxPool2d(kernel_size=2, stride=2),  # 64x112x112
+        self.convolution = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=11, stride=1, padding=4),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
 
-#             nn.Conv2d(64, 192, kernel_size=3, stride=1, padding=1), # output: 192x112x112
-#             nn.LeakyReLU(),
-#             nn.MaxPool2d(kernel_size=2, stride=2),  # 192x56x56
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
 
-#             nn.Conv2d(192, 128, kernel_size=1, stride=1, padding=0), # output: 128x56X56
-#             nn.LeakyReLU(),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2)
+        )
 
-#             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1), # output: 256x56x56
-#             nn.LeakyReLU(),
-#             nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0), # output: 256x56x56
-#             nn.LeakyReLU(),
-#             nn.Conv2d(256, 128, kernel_size=1, stride=1, padding=0), # output: 128x56x56
-#             nn.LeakyReLU(),
+        self.fully_connected = nn.Sequential(
+            nn.Linear(32 * 5 * 5, 100),
+            nn.ReLU(),
+            nn.Linear(100, num_classes * 5),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        output = self.convolution(x)
+
+        output = torch.flatten(output, 1)
+        output = self.fully_connected(output)
+        output = output.reshape(output.shape[0], self.num_classes, 5)
+
+        return output
 
 
-#             nn.MaxPool2d(kernel_size=2, stride=2),  # 256x28x28
+class LocalizationLoss(nn.Module):
+    def __init__(self):
+        super(LocalizationLoss, self).__init__()
 
+    def forward(self, output, target):
+        """
+        :param output:
+            Dimensions : (N, M, 7)
+                (i, j, 0) indique le niveau de confiance entre 0 et 1 qu'un vrai objet est représenté par le vecteur (n, m, :)
+                Si (i, j, 0) est plus grand qu'un seuil :
+                    (i, j, 1) est la position x centrale normalisée de l'objet prédit j de l'image i
+                    (i, j, 2) est la position y centrale normalisée de l'objet prédit j de l'image i
+                    (i, j, 3) est la largeur normalisée et la hauteur normalisée de l'objet prédit j de l'image i
+                    (i, j, 4) est le score pour la classe "anneau" de l'objet prédit j de l'image i
+        :param target: Le tenseur cible pour la tâche de détection:
+            Dimensions: (N, 3, 5)
+                Si un 1 est présent à (i, j, 0), le vecteur (i, j, 0:5) représente un objet.
+                Si un 0 est présent à (i, j, 0), le vecteur (i, j, 0:5) ne représente aucun objet.
+                Si le vecteur représente un objet (i, j, :):
+                    (i, j, 1) est la position x centrale normalisée de l'objet j de l'image i.
+                    (i, j, 2) est la position y centrale normalisée de l'objet j de l'image i.
+                    (i, j, 3) est la largeur normalisée et la hauteur normalisée de l'objet j de l'image i.
+                    (i, j, 4) est l'indice de la classe de l'objet j de l'image i.
+        """
 
-#         )
+        # À compléter
+        bce_criterion = nn.BCELoss(reduction="sum")
+        mse_criterion = nn.MSELoss(reduction="sum")
 
-#         self.reset_parameters()
+        target_obj = (target[:, :, 0] == 1).to(torch.float)
+        target_no_obj = (target[:, :, 0] == 0).to(torch.float)
+        target_xywh = target[:, :, 1:4]
 
-#     def reset_parameters(self):
-#         for layer in self.bbox_regressor:
-#             if isinstance(layer, nn.Linear):
-#                 nn.init.xavier_uniform_(layer.weight)
-#                 nn.init.constant_(layer.bias, 0)
+        target_classes = torch.zeros((target.shape[0], 3, 3)).to(target.get_device())
+        for i in range(target.shape[0]):
+            for j in range(target.shape[1]):
+                target_classes[i, j, int(target[i, j, -1])] = 1
 
-#     def forward(self, x):
-#         x = self.features(x)
-#         x = x.view(x.size(0), -1)
-#         bbox_output = self.bbox_regressor(x)
-#         bbox_output = bbox_output.view(x.size(0), 3, 5)
-#         #sigmoid_tensor = torch.cat([torch.sigmoid(bbox_output[:, :, :4]), bbox_output[:, :, 4:]], dim=2)
-#         return bbox_output
+        output_obj = output[:, :, 0]
+        output_xywh = output[:, :, 1:4]
+        output_classes = output[:, :, 4:]
 
-#     def getLost(self, output, target):
+        loss_xywh = mse_criterion(output_xywh, target_xywh)
+        loss_with_obj = bce_criterion(output_obj, target_obj)
+        loss_without_obj = bce_criterion(output_obj, target_no_obj)
+        loss_classes = bce_criterion(output_classes, target_classes)
 
-#         # output shape: (batch_size, num_boxes, 5)
-#         # target shape: (batch_size, num_boxes, 5)
-
-#         obj_mask = target[:, :, 0] >= 0.5  # object is present in the cell
-#         noobj_mask = target[:, :, 0] < 0.5  # object is not present in the cell
-
-#         mse = nn.MSELoss()
-#         # Compute the localization loss for boxes where an object is present
-#         loc_loss = torch.sum(obj_mask * mse(output[:,:,1:4], target[:,:,1:4]))
-#         loc_loss *= self.lambda_coord
-
-#         # Compute the confidence loss for boxes where an object is present
-#         conf_loss_obj = torch.sum(obj_mask * F.binary_cross_entropy(output[:, :, 0], target[:, :, 0], reduction='none'))
-#         conf_loss_noobj = torch.sum(noobj_mask * F.binary_cross_entropy(output[:, :, 0], target[:, :, 0], reduction='none'))
-#         conf_loss = conf_loss_obj + self.lambda_noobj * conf_loss_noobj
-
-#         # Compute the classification loss for boxes where an object is present
-#         class_loss = torch.sum(obj_mask * mse(output[:, :, 4:]*2.99, target[:, :, 4:]))
-
-#         # Compute the total loss
-#         loss = loc_loss + conf_loss + class_loss
-
-#         return loss
+        return 5 * loss_xywh + loss_with_obj + 0.5 * loss_without_obj + 3 * loss_classes
+        # return 2 * loss_xywh + loss_classes
