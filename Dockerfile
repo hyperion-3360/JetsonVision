@@ -6,7 +6,11 @@ COPY entrypoint.sh ./
 COPY ./src ./
 COPY ./frameworks ./
 
-#RUN python3 -m pip install -r requirements.txt
+RUN sudo apt-get update
+RUN sudo apt-get install python3-pil.imagetk -y
+RUN sudo apt-get install python3-tk -y
+
+# RUN python3 -m pip install -r requirements.txt
 
 # ENTRYPOINT ["./entrypoint.sh"]
 
