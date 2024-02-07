@@ -1,3 +1,20 @@
+## April tags coordinates and rotation matrix
+
+From the `Layout marking diagram` pdf:
+
+**DIMENSIONS ARE IN INCHES**
+
+**TODO: change env.json for ID [4,16]**
+
+> The XYZ Origin is established in the bottom left corner of the field (as viewed in the image above). An x coordinate of 0 is aligned with the Blue Alliance Station diamond plate. A y coordinate of 0 is aligned with the side border polycarbonate on the Scoring Table side of the field. A z coordinate of 0 is on the carpet.
++Z is up into the air from the carpet, +X is horizontal to the
+right (in this image above) toward the opposing alliance stations, and +Y runs from the Field Border towards the SPEAKERS. The face-pose of the tags is denoted with 1 degree representation, the Z-rotation. 0° faces the red alliance
+station, 90° faces the non- scoring table side, and 180°
+faces the blue alliance station. Distances are measured to the center of the tag.
+
+[**Calculate the rotation matrix around the Z axis**](https://www.redcrab-software.com/en/Calculator/3x3/Matrix/Rotation-Z)
+
+
 ## Direct UDP stream from the Jetson to a remote computer on the same local network
 
 ### Server (jetson)

@@ -12,8 +12,8 @@ import signal
 import cv2
 from april_tags import euler
 
-#tag size in meter (15 centimeters, eg 6")
-TAG_SIZE = 0.15
+#tag size in meter (16.51 centimeters, eg 6.5")
+TAG_SIZE = 16.51
 
 def build_arg_parser():
     parser = argparse.ArgumentParser(description="Hyperion 3360 Chargedup 2023 vision application")
@@ -154,9 +154,8 @@ def init_network_tables(args):
 ################################################################################
 def process_april_tag_detection( camera_params, detector, result, tag_info ):
 
-    # using the hamming==0 removes false detections that are frequent in the
-    # tag16h5 tag family
-    if result.tag_id in tag_info.keys() and result.hamming == 0:
+    # tag36h11. We can allow for some error correcting. Hamming <= 2
+    if result.tag_id in tag_info.keys() and result.hamming <= 2:
 
         pose, _, _ = detector.detection_pose(result, camera_params['params'] )
 
@@ -171,7 +170,7 @@ def process_april_tag_detection( camera_params, detector, result, tag_info ):
             tag_pose = np.zeros((4,4))
             rot = np.array(tag_dict['pose']['rotation'])
             tag_pose[0:3,0:3] = rot
-            T = np.array([ tag_dict['pose']['translation'][x] for x in ['x', 'y', 'z']]).T
+            T = np.asarray(list(tag_dict['pose']['translation'].values())) * 2.54 # convert inches to cm
             tag_pose[0:3,3] = T
             tag_pose[3,3] = 1
 
@@ -207,6 +206,7 @@ def compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params
     estimated_poses = []
     # loop over the AprilTag detection results
     for r in results:
+
         pose = process_april_tag_detection( camera_params, detector, r, tag_info )
         if pose is not None:
             estimated_poses.append(pose)
@@ -302,11 +302,11 @@ def vision_processing(kwargs):
 
         #if we have a good frame from the camera
         if ret:
-            detect_notes(frame)
-
             if args.apriltag:
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
-
+                if angles is not None:
+                    print(f"pos: {pos}")
+                    print(f"anglkes: {angles}")
                 # if pos is not None:
                 #     msg_q.put({'april_tag':(pos, angles)})
 
@@ -315,7 +315,7 @@ def vision_processing(kwargs):
                     draw_april_tags(frame, tag_detections)
 
                 # show the output image after AprilTag detection
-                # cv2.imshow("Image", frame)
+                cv2.imshow("Image", frame)
                 cv2.waitKey(1)
 
     if args.gui:
@@ -334,105 +334,6 @@ def setup_capture(dev, w, h):
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
     return cap
 
-def ref_circle(radius):
-    radius = round(radius)
-    canva = np.zeros((radius*2, radius*2), dtype=np.uint8)
-    canva = cv2.circle(canva, (radius, radius), radius, 255, 1)
-
-    return np.asarray(list(zip(*np.where(canva == 255))))
-
-
-def detect_notes(frame):
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-    # Threshold of orange in HSV space
-    lower_orange = np.array([0, 120, 200])
-    upper_orange = np.array([25, 255, 255])
-
-    # preparing the mask to overlay
-    mask = cv2.inRange(hsv, lower_orange, upper_orange)
-
-    # The black region in the mask has the value of 0,
-    # so when multiplied with original image removes all non-blue regions
-    color_masked = cv2.bitwise_and(frame, frame, mask = mask)
-
-    _, gray, _ = cv2.split(color_masked)
-
-    # gray[np.where(gray > 0)] = 255
-
-    kernel = np.ones((5, 5), np.uint8)
-    gray = cv2.dilate(gray, kernel, iterations=2)
-    # gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-    # gray = cv2.GaussianBlur( gray, (9, 9), 2, 2 )
-
-    cv2.imshow("masked", color_masked)
-    cv2.imshow("gray", gray)
-
-
-######### METHOD 1 ##########
-    # # Try to fit contours into an ellipse
-    # possible_ellipses = []
-    # for cnt in cnts:
-    #     cnt = cnt.reshape(-1, 2)
-    #     center, size, rot = cv2.fitEllipse(cnt.reshape(-1, 2))
-
-    #     rot = np.floor(rot) % 90 # L'ellipse de la note ne devrait pas avoir une boite englobante en rotation
-    #     if rot != 0:
-    #         continue
-
-    #     width = size[0]
-    #     height = size[1]
-
-    #     # We assume the detected elipse should be approximatly a circle
-    #     mean_radius = (height/2) + (np.power(width, 2)/(8*height))
-    #     if mean_radius < 50: # rayon min de 50px...
-    #         continue
-
-    #     circle = ref_circle(mean_radius)
-    #     print(f"radius: {mean_radius}")
-    #     score = cv2.matchShapes(cnt, circle, cv2.CONTOURS_MATCH_I1, 0.0)
-
-    #     if score < 10:
-    #         possible_ellipses.append((center, mean_radius))
-
-    #     print(f"score: {score}")
-    #     print("-----")
-    #
-    # # top left and bottom right corners
-    # for s in possible_ellipses:
-    #     x, y = s[0]
-    #     r = s[1]
-
-    #     frame = cv2.rectangle(frame, np.round((x-r, y+r)).astype(np.int16), np.round((x+r, y-r)).astype(np.int16), (0, 255, 0), 1)
-
-    # cv2.imshow("detected", frame)
-
-######### METHOD 2 ##########
-    # canny = cv2.Canny(gray, 100, 200)
-    # cv2.imshow("canny", canny)
-
-    # gray = cv2.GaussianBlur( gray, (9, 9), 2, 2 )
-    # cv2.imshow("blurred", gray)
-
-    # f = np.fft.fft2(gray)
-    # fshift = np.fft.fftshift(f)
-    # magnitude_spectrum = 20*np.log(np.abs(fshift))
-    # plt.subplot(121),plt.imshow(gray, cmap = 'gray')
-    # plt.title('Input Image'), plt.xticks([]), plt.yticks([])
-    # plt.subplot(122),plt.imshow(magnitude_spectrum, cmap = 'gray')
-    # plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
-
-    # circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, gray.shape[1], 100, 100, 200)
-
-    # if circles is not None:
-    #     circles = np.round(circles[0]).astype(np.int16)
-    #     if circles.shape != (1,):
-    #         for circle in circles:
-    #             cv2.circle(frame, (circle[0], circle[1]), circle[2], (255, 0, 0), -1)
-    # cv2.imshow("circles", frame)
-
-    # plt.show()
-    cv2.waitKey(0)
 
 ################################################################################
 def main():
@@ -472,8 +373,4 @@ def main():
 
 #--------------------------------------------------------------------------------
 if __name__ == "__main__":
-    # main()
-
-    for file in os.listdir('notes'):
-        f = cv2.imread(f'notes/{file}')
-        detect_notes(f)
+    main()
