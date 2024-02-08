@@ -15,10 +15,21 @@ def test_stream_and_feed(encoder_process: FfmpegEncoderX264.ProcessInfo):
 
 
 def send_over_net(encoder_process: FfmpegEncoderX264.ProcessInfo):
-    for frame in read_encoded(encoder_process):
-        # frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
-        cv2.imshow("title", frame)
-        cv2.waitKey(1)
+
+    # Read directly from pipe
+    cap = cv2.VideoCapture('pipe:{}'.format(encoder_process.raw.stdout.fileno()))
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc('H', '2', '6', '4'))
+
+    while(True):
+        r, f = cap.read()
+        if(r):
+            cv2.imshow("title", f)
+            cv2.waitKey(1)
+
+    # for frame in read_encoded(encoder_process):
+    #     # frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
+    #     cv2.imshow("title", frame)
+    #     cv2.waitKey(1)
 
 
 if __name__ == "__main__":

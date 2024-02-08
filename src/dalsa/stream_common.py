@@ -17,9 +17,9 @@ class FfmpegEncoderX264:
     def start_ffmpeg(width: int, height: int):
         process = (
             ffmpeg
-            .input('pipe:', format='rawvideo', pix_fmt='rgb32', s=f'{width}x{height}')
+            .input('pipe:', format='rawvideo', pix_fmt='bgr24', s=f'{width}x{height}')
             .video
-            .output('pipe:', format="h264", vcodec='libx264', pix_fmt='yuv444p')
+            .output('pipe:', format="h264", vcodec='libx264', pix_fmt='yuv444p', preset="ultrafast", tune="zerolatency")
             .run_async(pipe_stdin=True, pipe_stdout=True)
         )
 
@@ -32,21 +32,22 @@ class FfmpegEncoderX264:
         """
         process.raise_if_unstarted()
 
-        data = frame.astype(np.uint32).tobytes()
+        data = frame.astype(np.uint8).tobytes()
         process.raw.stdin.write(data)
 
     @staticmethod
     def read_encoded(process: ProcessInfo) -> Optional[np.ndarray]:
         process.raise_if_unstarted()
 
-        # Read raw video frame from stdout as bytes array.
-        w, h = process.resolution
-        in_bytes = process.raw.stdout.read(w * h * 3)
-        if not in_bytes:
-            return None
+        raise Exception("TODO: what size should the h264 buffer be ?")
+        # # Read raw video frame from stdout as bytes array.
+        # w, h = process.resolution
+        # in_bytes = process.raw.stdout.read(w * h * 3)
+        # if not in_bytes:
+        #     return None
 
-        # transform the byte read into a numpy array
-        return np.frombuffer(in_bytes, np.uint8).reshape([h, w, 3])
+        # # transform the byte read into a numpy array
+        # return np.frombuffer(in_bytes, np.uint8).reshape([h, w, 3])
 
     @staticmethod
     def release(process: ProcessInfo):
