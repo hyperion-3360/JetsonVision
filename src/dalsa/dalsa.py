@@ -10,8 +10,7 @@ from PIL import Image
 # (Change this if directory structure is changed).
 import os
 from utils import ipAddr_to_string, to_PIL
-
-sys.path.append(os.path.dirname(__file__) + "./gigev_common")
+sys.path.append(os.path.dirname(__file__) + "/gigev_common")
 
 import pygigev  # includeded in ../gigev_common, DO NOT install from pip
 from pygigev import GevPixelFormats as GPF

@@ -9,7 +9,7 @@ from PIL import Image
 # Get the common support code for the GigE-V Framework for Linux
 # (Change this if directory structure is changed).
 import os
-sys.path.append(os.path.dirname(__file__) + "./gigev_common")
+sys.path.append(os.path.dirname(__file__) + "/gigev_common")
 from pygigev import GevPixelFormats as GPF
 
 
