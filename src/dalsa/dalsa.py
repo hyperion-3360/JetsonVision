@@ -9,7 +9,7 @@ from PIL import Image
 # Get the common support code for the GigE-V Framework for Linux
 # (Change this if directory structure is changed).
 import os
-from dalsa.utils import ipAddr_to_string, to_PIL
+from utils import ipAddr_to_string, to_PIL
 
 sys.path.append(os.path.dirname(__file__) + "./gigev_common")
 

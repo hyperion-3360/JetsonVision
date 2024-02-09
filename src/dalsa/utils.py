@@ -2,8 +2,6 @@
 
 from functools import reduce
 
-from dalsa.grabImage import BufferParams
-
 import sys
 
 from PIL import Image
