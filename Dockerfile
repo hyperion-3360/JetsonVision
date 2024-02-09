@@ -19,8 +19,10 @@ RUN cp GigE-V-Framework_aarch64_2.21.1.0195.tar.gz $HOME
 RUN cd $HOME
 RUN tar -zxf GigE-V-Framework_aarch64_2.21.1.0195.tar.gz
 
-RUN cd DALSA
-RUN ./corinstall
+#WORKDIR DALSA
+# RUN ./corinstall -y
+
+# WORKDIR ..
 
 # ENTRYPOINT ["./entrypoint.sh"]
 
