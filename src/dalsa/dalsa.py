@@ -310,8 +310,8 @@ class Camera:
             # Check for dropped frame
             # Check img data status
             gevbuf = gevbufPtr.contents
-            if status != 0 or gevbuf.status != 0:
-                # print("Img # ", imgIndex, " has status = ", gevbuf.status)
+            if gevbuf.status != 0:
+                print("Img # ", imgIndex, " has status = ", gevbuf.status)
                 continue
 
             print(f"Img {imgIndex} : id = {gevbuf.id} w = {gevbuf.w} h = {gevbuf.h} address = {hex(gevbuf.address)}")
@@ -396,17 +396,17 @@ if __name__ == "__main__":
 
     camera = Camera(index=0)
     camera.open()
-    camera.setup(buffer_count=1)
+    camera.setup(buffer_count=2)
     
-    for i in range(10):
+    for i in range(2):
+        # Accumulate the frames in the buffer,
+        # since the camera doesn't seem to keep them
+        # for a long time
         frames = list(camera.read())
-
-        if len(frames) > 0:
-            frame = frames[0]
+        for frame in frames:
             frame = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
             cv2.imshow("test", frame)
             cv2.waitKey(0)
-    
 
     camera.release()
     pygigev.GevApiUninitialize()
