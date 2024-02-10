@@ -21,9 +21,8 @@ RUN tar -zxf GigE-V-Framework_aarch64_2.21.1.0195.tar.gz
 
 #WORKDIR DALSA
 # RUN ./corinstall -y
-
 # WORKDIR ..
 
-# ENTRYPOINT ["./entrypoint.sh"]
+#ENTRYPOINT ["./entrypoint.sh"]
 
 # CMD ["python3", "autoencoder/training_context.py"]
