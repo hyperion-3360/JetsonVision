@@ -46,7 +46,7 @@ class BufferParams:
 
 class CameraInfo:
     @staticmethod
-    def list_ips(max_n: int = 4):
+    def list_cameras(max_n: int = 4):
         numFound = (ctypes.c_uint32)(0)
         camera_info = (pygigev.GEV_CAMERA_INFO * max_n)()
 
@@ -60,10 +60,13 @@ class CameraInfo:
 
 
         print(f"{numFound.value} cameras found")
+        return camera_info[:numFound.value]
 
+    @staticmethod
+    def parse_ips(cameras):
         ips = []
-        for camIndex in range(numFound.value):
-            ips.append(ipAddr_to_string(camera_info[camIndex].ipAddr))
+        for cam in cameras:
+            ips.append(ipAddr_to_string(cam.ipAddr))
 
         return ips
 
@@ -81,11 +84,18 @@ class CameraInfo:
 
 class Camera:
     def __init__(self, ip: Optional[str] = None, index: Optional[str] = None):
+        available_cameras = CameraInfo.list_cameras()
+        ips = CameraInfo.parse_ips(available_cameras)
+
         if ip == None:
             index = index or 0
-            ip = CameraInfo.list_ips()[index]
-
-        self.ip = ip
+            self.ip = ips[index]
+            self._camera_info = available_cameras[index]
+        else:
+            if ip not in ips:
+                raise Exception(f"Could not find camera at specified ip. Available ips are: {ips}")
+            self.ip = ip
+            self._camera_info = available_cameras[ips.index(ip)]
 
         self._handle = None
         self._buffer_count = None
@@ -95,7 +105,7 @@ class Camera:
         print(f"Opening camera {self.ip}")
 
         handle = (ctypes.c_void_p)()
-        status = pygigev.GevOpenCamera(self.ip, pygigev.GevExclusiveMode, ctypes.byref(handle))
+        status = pygigev.GevOpenCamera(self._camera_info, pygigev.GevExclusiveMode, ctypes.byref(handle))
         # TODO check status
 
         self._handle = handle
