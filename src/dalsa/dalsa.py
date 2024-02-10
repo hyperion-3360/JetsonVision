@@ -226,3 +226,19 @@ class Camera:
 
         return params
 
+
+if __name__ == "__main__":
+    # Initialize the API
+    pygigev.GevApiInitialize()
+
+    camera = Camera(index=0)
+    camera.open()
+    camera.setup(buffer_count=1)
+
+
+    frame = camera.read()
+
+    print(frame)
+
+    camera.release()
+
