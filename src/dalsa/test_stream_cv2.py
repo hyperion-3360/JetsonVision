@@ -27,8 +27,10 @@ def send_over_net(encoder_process: FfmpegEncoderX264.ProcessInfo):
     cap = cv2.VideoCapture('pipe:{}'.format(encoder_process.raw.stdout.fileno()))
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc('H', '2', '6', '4'))
 
-    gstreamer_str = "appsrc ! vtenc_h264 ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5000"
-    out = cv2.VideoWriter(gstreamer_str, 0, 30, (1280, 720))
+    # gstreamer_str = "appsrc ! vtenc_h264 ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5000"
+    # out = cv2.VideoWriter(gstreamer_str, 0, 30, (1280, 720))
+    gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=BGRx ! nvvidconv ! nvv4l2h264enc ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5001"
+    out = cv2.VideoWriter(gst_out, cv2.CAP_GSTREAMER, 0, float(30), (int(w=1280), int(720)))
 
     while(True):
         r, f = cap.read()

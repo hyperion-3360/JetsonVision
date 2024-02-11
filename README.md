@@ -12,6 +12,15 @@ Camera 2: 169.254.2.146
 ### Run the container in an interactive shell with CUDA enabled
 `docker run -it --rm --runtine nvidia --network host -v [volume name]:[where to mount in container] [image tag]`
 
+### To add camera access to Docker:
+1. `ls /dev/video*`
+
+2. In the docker command, add `--device /dev/video[0-9]` depending on your device's index
+
+e.g.
+
+`docker run -it --rm --runtine nvidia --network host --device /dev/video0 -v [volume name]:[where to mount in container] [image tag]`
+
 ## Example with a simple autoencoder neural network
 
 ```
