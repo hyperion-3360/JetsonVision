@@ -5,5 +5,3 @@ WORKDIR app
 COPY ./src ./
 
 RUN python3 -m pip install -r requirements.txt
-
-# CMD ["python3", "autoencoder/training_context.py"]
