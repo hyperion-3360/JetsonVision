@@ -1,3 +1,15 @@
+## Direct UDP stream from the Jetson to a remote computer on the same local network
+
+### Server (jetson)
+**Set the correct input device (`/dev/video*`) and change the ip address for the target device's ip**
+
+`gst-launch-1.0 v4l2src device=/dev/video0 ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=500 speed-preset=superfast ! rtph264pay config-interval=10 pt=96 ! udpsink host=10.33.60.212 port=5000`
+
+### Client (mac)
+**Listen for UDP packets on the same port (5000 in this case)**
+
+`gst-launch-1.0 -v udpsrc port=5000 caps = "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96" ! rtph264depay ! h264parse  ! avdec_h264 ! videoconvert ! autovideosink`
+
 ## Steps to build and execute a docker image in a Jetson for AI and image processing
 
 ### Build the image
