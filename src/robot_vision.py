@@ -278,7 +278,7 @@ def vision_processing(kwargs):
     cap = kwargs['camera']
     camera_params = kwargs['camera_params']
     tag_info = kwargs['tag_info']
-    # msg_q = kwargs['comm_msg_q']
+    msg_q = kwargs['comm_msg_q']
 
     # ai_model = kwargs['model']
 
@@ -305,8 +305,8 @@ def vision_processing(kwargs):
                 if angles is not None:
                     print(f"pos: {pos}")
                     print(f"anglkes: {angles}")
-                # if pos is not None:
-                #     msg_q.put({'april_tag':(pos, angles)})
+                if pos is not None:
+                    msg_q.put({'april_tag':(pos, angles)})
 
             if args.gui:
                 if args.apriltag:
@@ -319,7 +319,7 @@ def vision_processing(kwargs):
     if args.gui:
         cv2.destroyAllWindows()
 
-    # msg_q.put({'command':'stop'})
+    msg_q.put({'command':'stop'})
 
 ################################################################################
 # setup the camera capture parameter, this version is a simple convenience
@@ -357,14 +357,14 @@ def main():
 
     kwargs['camera'] = setup_capture(args.device, args.width, args.height)
 
-    # comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
+    comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
 
-    # comm_thread.start()
+    comm_thread.start()
 
     if args.apriltag:
         vision_processing(kwargs)
 
-    # comm_thread.join()
+    comm_thread.join()
 
     if kwargs['camera'] is not None and kwargs['camera'].isOpened():
         kwargs['camera'].release()
