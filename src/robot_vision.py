@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import threading
 import json
-# from networktables import NetworkTables
+from networktables import NetworkTables
 import queue
 import signal
 import cv2
@@ -89,7 +89,6 @@ def init_april_tag(args):
 # Push the values in specific sections of network tables
 ################################################################################
 def communication_thread(message_q):
-    return
     notified = [False]
 
     cond = threading.Condition()
@@ -140,12 +139,11 @@ def communication_thread(message_q):
 # Initialize networktables
 ################################################################################
 def init_network_tables(args):
-    # msg_q = queue.Queue()
-    # NetworkTables.initialize(args.rio_ip)
-    # comm_thread = threading.Thread(target=communication_thread, args=(msg_q, ), daemon=True)
+    msg_q = queue.Queue()
+    NetworkTables.initialize(args.rio_ip)
+    comm_thread = threading.Thread(target=communication_thread, args=(msg_q, ), daemon=True)
 
-    # return comm_thread, msg_q
-    ...
+    return comm_thread, msg_q
 
 ################################################################################
 # Base on the detector results computes the absolute global position and
