@@ -168,7 +168,7 @@ def process_april_tag_detection( camera_params, detector, result, tag_info ):
             tag_pose = np.zeros((4,4))
             rot = np.array(tag_dict['pose']['rotation'])
             tag_pose[0:3,0:3] = rot
-            T = np.asarray(list(tag_dict['pose']['translation'].values())) * 2.54 # convert inches to cm
+            T = np.asarray(list(tag_dict['pose']['translation'].values()))
             tag_pose[0:3,3] = T
             tag_pose[3,3] = 1
 
