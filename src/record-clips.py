@@ -22,6 +22,8 @@ def record(cameraid: int, store: Path):
     r, f = cap.read()
     if(r):
       out.write(f)
+    else:
+      print(f"Failed frame: camera {cameraid}")
 
   out.release()
   cap.release()
