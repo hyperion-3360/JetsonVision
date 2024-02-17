@@ -65,3 +65,9 @@ gst-launch-1.0 v4l2src device=/dev/video0 ! queue ! videoconvert ! x264enc tune=
 # Client (mac)
 gst-launch-1.0 -v udpsrc port=5000 caps = "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96" ! rtph264depay ! h264parse  ! avdec_h264 ! videoconvert ! autovideosink
 
+
+### REDUCED LATENCY WITH VLC
+
+gst-launch-1.0 avfvideosrc ! queue ! videoconvert ! x264enc tune=zerolatency speed-preset=superfast ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5000
+
+vlc ./test.sdp --network-caching=100 --h264-fps=30 --no-audio
