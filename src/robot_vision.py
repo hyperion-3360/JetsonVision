@@ -1,8 +1,5 @@
 import argparse
-import os
 import apriltag
-from pathlib import Path
-from matplotlib import pyplot as plt
 import numpy as np
 import threading
 import json
