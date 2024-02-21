@@ -15,7 +15,7 @@ def record(cameraid: int, store: Path):
 
 
   print(store / f"clip-{cameraid}.mp4")
-  out = cv2.VideoWriter(str(store / f"clip-{cameraid}.mp4"), cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (1280, 720))
+  out = cv2.VideoWriter(str(store / f"clip-{cameraid}.mp4"), cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 30, (1280, 800))
 
   global QUIT
   while not QUIT: # meh we don't care about thread safety here. We're just reading and we assume only 1 thread will change the QUIT value. In the worst case, we will stop a couple of frames later
@@ -43,7 +43,7 @@ if __name__ == "__main__":
   store.mkdir()
 
   # Start the recording
-  cameras = [0, 2]  # camera ids
+  cameras = [0, 2, 4]  # camera ids
 
   threads = []
   for camera in cameras:

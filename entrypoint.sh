@@ -1,1 +1,1 @@
-python src/robot_vision.py 0 --apriltag -e src/env.json -c src/camera.json --gui
+python3 robot_vision.py 2 --apriltag -e env.json -c camera.json --width 1280 --height 800
