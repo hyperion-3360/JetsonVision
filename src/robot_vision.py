@@ -9,7 +9,7 @@ import signal
 import cv2
 from april_tags import euler
 
-#tag size in meter (16.51 centimeters, eg 6.5")
+#tag size in centimeters (16.51 centimeters, eg 6.5")
 TAG_SIZE = 16.51
 
 def build_arg_parser():
