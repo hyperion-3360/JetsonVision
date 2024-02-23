@@ -1,7 +1,5 @@
 import argparse
 import apriltag
-from ai import trt_demo as trt
-from pathlib import Path
 import numpy as np
 import threading
 import json
@@ -11,17 +9,14 @@ import signal
 import cv2
 from april_tags import euler
 
-#tag size in meter (15 centimeters, eg 6")
-TAG_SIZE = 0.15
+#tag size in centimeters (16.51 centimeters, eg 6.5")
+TAG_SIZE = 16.51
 
 def build_arg_parser():
     parser = argparse.ArgumentParser(description="Hyperion 3360 Chargedup 2023 vision application")
 
     #do we want gui output
-    parser.add_argument("-g", "--gui", dest='gui', action='store_true', help="display AR feed from camera with optional AprilTag detection and or AI")
-
-    #do we want AI
-    parser.add_argument("--ai", dest='ai', action='store_true', help="enable object detection")
+    parser.add_argument("-g", "--gui", dest='gui', action='store_true', help="display AR feed from camera with optional AprilTag detection")
 
     #do we want AprilTag
     parser.add_argument("--apriltag", dest='apriltag', action='store_true', help="enable apriltag detection")
@@ -65,40 +60,6 @@ def build_arg_parser():
     return parser
 
 ################################################################################
-# AI model initialization and load in GPU
-# Build the engine if the .trt model file doesn't exist
-# Warmup the model
-# Load the categories
-################################################################################
-def init_AI(args):
-    precision = "float16" if args.fp16 else "float32"
-
-    # Load categories
-    categories = trt.load_labels(args.labels)
-
-    if not args.trt and args.onnx:
-        args.trt = str(Path(args.onnx).with_suffix(".trt"))
-
-    # Model input has dynamic shape but we still need to specify an optimization
-    # profile for TensorRT
-    opt_size = tuple((args.height, args.width))
-
-    if not Path(args.trt).exists():
-        # Export TensorRT engine
-        trt.export_tensorrt_engine(
-            args.onnx,
-            args.trt,
-            opt_size=opt_size,
-            precision=precision,
-        )
-
-    # TensorRT inference
-    model = trt.YOLOXTensorRT(args.trt, precision=precision, input_shape=[args.height, args.width])
-    model.warmup(n=args.warmup)
-
-    return model, categories
-
-################################################################################
 # April tag subsystme initialization
 # Open an parse the game environment JSON
 # Open an parse the camera fundamental parameters
@@ -125,7 +86,6 @@ def init_april_tag(args):
 # Push the values in specific sections of network tables
 ################################################################################
 def communication_thread(message_q):
-
     notified = [False]
 
     cond = threading.Condition()
@@ -189,9 +149,8 @@ def init_network_tables(args):
 ################################################################################
 def process_april_tag_detection( camera_params, detector, result, tag_info ):
 
-    # using the hamming==0 removes false detections that are frequent in the 
-    # tag16h5 tag family
-    if result.tag_id in tag_info.keys() and result.hamming == 0:
+    # tag36h11. We can allow for some error correcting. Hamming <= 2
+    if result.tag_id in tag_info.keys() and result.hamming <= 2:
 
         pose, _, _ = detector.detection_pose(result, camera_params['params'] )
 
@@ -206,7 +165,7 @@ def process_april_tag_detection( camera_params, detector, result, tag_info ):
             tag_pose = np.zeros((4,4))
             rot = np.array(tag_dict['pose']['rotation'])
             tag_pose[0:3,0:3] = rot
-            T = np.array([ tag_dict['pose']['translation'][x] for x in ['x', 'y', 'z']]).T
+            T = np.asarray(list(tag_dict['pose']['translation'].values()))
             tag_pose[0:3,3] = T
             tag_pose[3,3] = 1
 
@@ -242,6 +201,7 @@ def compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params
     estimated_poses = []
     # loop over the AprilTag detection results
     for r in results:
+
         pose = process_april_tag_detection( camera_params, detector, r, tag_info )
         if pose is not None:
             estimated_poses.append(pose)
@@ -307,7 +267,7 @@ def draw_object_detections(frame, predictions):
         cv2.rectangle( frame, (absx1, absy1), (absx2, absy2), (255,0,0), 5)
 
 ################################################################################
-# This is the main vision processing loop, it reads frames from camera and 
+# This is the main vision processing loop, it reads frames from camera and
 # process april tags and AI detection
 ################################################################################
 def vision_processing(kwargs):
@@ -317,7 +277,7 @@ def vision_processing(kwargs):
     tag_info = kwargs['tag_info']
     msg_q = kwargs['comm_msg_q']
 
-    ai_model = kwargs['model']
+    # ai_model = kwargs['model']
 
     dist_coeffs = np.array(camera_params['dist'])
     fc = camera_params['params']
@@ -325,8 +285,8 @@ def vision_processing(kwargs):
 
     precision = "float16" if args.fp16 else "float32"
 
-    options = apriltag.DetectorOptions( families='tag16h5',
-                                        debug=False, 
+    options = apriltag.DetectorOptions( families='tag36h11',
+                                        debug=False,
                                         refine_decode=True,
                                         refine_pose=True)
     detector = apriltag.Detector(options)
@@ -337,30 +297,21 @@ def vision_processing(kwargs):
 
         #if we have a good frame from the camera
         if ret:
-
             if args.apriltag:
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
-
+                if angles is not None:
+                    print(f"pos: {pos}")
+                    print(f"anglkes: {angles}")
                 if pos is not None:
                     msg_q.put({'april_tag':(pos, angles)})
-
-            if args.ai:
-                image = trt.convert_to_nchw(frame, dtype=precision)
-                image = image.astype(np.uint8)
-                predictions = ai_model(image)
-                for p in predictions:
-                    c, s, x1, y1, x2, y2  = p
-                    cat = kwargs['categories'][int(c)]
-                    msg_q.put({'detection':(cat,s) + normalized_to_absolute(x1,y1,x2,y2, args.width, args.height)})
 
             if args.gui:
                 if args.apriltag:
                     draw_april_tags(frame, tag_detections)
-                if args.ai:
-                    draw_object_detections(frame, predictions)
+
                 # show the output image after AprilTag detection
                 cv2.imshow("Image", frame)
-                cv2.waitKey(10)
+                cv2.waitKey(1)
 
     if args.gui:
         cv2.destroyAllWindows()
@@ -368,8 +319,8 @@ def vision_processing(kwargs):
     msg_q.put({'command':'stop'})
 
 ################################################################################
-# setup the camera capture parameter, this version is a simple convenience 
-# function but a much more elaborate gstreamer pipeline could be used with 
+# setup the camera capture parameter, this version is a simple convenience
+# function but a much more elaborate gstreamer pipeline could be used with
 # a CSI camera based on nvargus
 ################################################################################
 def setup_capture(dev, w, h):
@@ -377,6 +328,7 @@ def setup_capture(dev, w, h):
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
     return cap
+
 
 ################################################################################
 def main():
@@ -397,9 +349,6 @@ def main():
 
     kwargs['args'] = args
 
-    if args.ai:
-        kwargs['model'], kwargs['categories'] = init_AI(args)
-
     if args.apriltag:
         kwargs['tag_info'],kwargs['camera_params'] = init_april_tag(args)
 
@@ -409,9 +358,13 @@ def main():
 
     comm_thread.start()
 
-    vision_processing(kwargs)
+    if args.apriltag:
+        vision_processing(kwargs)
 
     comm_thread.join()
+
+    if kwargs['camera'] is not None and kwargs['camera'].isOpened():
+        kwargs['camera'].release()
 
 #--------------------------------------------------------------------------------
 if __name__ == "__main__":

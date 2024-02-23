@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   vision-srv:
-    entrypoint: record-clips.py
+    entrypoint: entrypoint.sh
     runtime: nvidia
     network: host
     volumes:
@@ -16,7 +16,7 @@ services:
       restart_policy:
         condition: any
         delay: 0s
-        window: 10sg
+        window: 10s
 
 volumes:
     visionvolume:
