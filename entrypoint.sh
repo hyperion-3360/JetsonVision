@@ -1,1 +1,0 @@
-python3 robot_vision.py 4 --apriltag -e env.json -c camera.json --width 1280 --height 800

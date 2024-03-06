@@ -2,18 +2,34 @@ version: "2.3"
 
 services:
   vision-srv:
-    entrypoint: entrypoint.sh
     runtime: nvidia
     network_mode: host
     volumes:
       - visionvolume:/home/data
     devices:
       - /dev/video0
-      - /dev/video1
+      - /dev/video2
+      - /dev/video4
     build:
       context: .
+    env_file: ./.env
+    restart: always
+    command: sh -c "python3 robot_vision.py 0 --apriltag -e env.json -c camera2.json --width 1280 --height 800"
+
+  roboflow-srv:
+    image: roboflow/roboflow-inference-server-jetson-5.1.1:latest
+    privileged: true
+    runtime: nvidia
+    network_mode: host
+    ports:
+      - "9001:9001"
+    env_file: ./.env
+    volumes:
+      - inference-cache:/tmp/cache
     restart: always
 
 volumes:
-    visionvolume:
-        external: false
+  visionvolume:
+      external: false
+  inference-cache:
+    external: false

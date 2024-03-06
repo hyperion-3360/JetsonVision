@@ -6,6 +6,4 @@ COPY ./pipdeps ./pipdeps
 COPY ./src/requirements.txt .
 RUN python3 -m pip install --no-index --find-links /app/pipdeps/ -r requirements.txt
 
-COPY entrypoint.sh .
-
 COPY ./src ./

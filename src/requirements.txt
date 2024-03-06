@@ -3,3 +3,4 @@ tensorrt
 pycuda
 numpy==1.17.4
 pynetworktables
+inference-sdk
