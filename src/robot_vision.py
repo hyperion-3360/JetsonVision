@@ -57,6 +57,8 @@ def build_arg_parser():
     #warmup inferece to prime the pump!
     parser.add_argument( "--warmup", type=int, default=5, help="Model warmup",)
 
+    parser.add_argument( "--record", type=str, default="/home/data/rec.mp4", help="Record file to specified location",)
+
     return parser
 
 ################################################################################
@@ -291,6 +293,9 @@ def vision_processing(kwargs):
                                         refine_pose=True)
     detector = apriltag.Detector(options)
 
+    if args.record:
+        video_out = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),15, (args.width,args.height))
+
     while( cap.isOpened() and not kwargs['quit'] ):
         #read a frame
         ret, frame = cap.read()
@@ -305,13 +310,20 @@ def vision_processing(kwargs):
                 if pos is not None:
                     msg_q.put({'april_tag':(pos, angles)})
 
-            if args.gui:
-                if args.apriltag:
-                    draw_april_tags(frame, tag_detections)
 
+            if args.apriltag:
+                draw_april_tags(frame, tag_detections)
+
+            if args.gui:
                 # show the output image after AprilTag detection
                 cv2.imshow("Image", frame)
                 cv2.waitKey(1)
+
+            if args.record:
+                video_out.write(frame)
+
+    if args.record:
+        video_out.release()
 
     if args.gui:
         cv2.destroyAllWindows()
