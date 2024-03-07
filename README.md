@@ -1,3 +1,40 @@
+## Docker compose
+
+### Start and (re)build the docker containers
+`-d` sends the process in the background and automatically restarts the containers when the device boots up
+
+`docker-compose up --force-recreate -d`
+
+### Stop the container
+
+Stop without removing the containers:
+
+`docker-compose stop`
+
+### Stop and remove containers
+Next `docker-compose up` will automatically re-create the containers:
+
+`docker-compose down`
+
+### P.S.
+Edit the [docker-compose.yml](docker-compose.yml) file to remove usb devices if some cameras are not plugged in or the camera ids changed
+
+## Useful docker commands
+
+**To manually build and launch docker containers, go to the [Steps to build and execute a docker image in a Jetson for AI and image processing](#steps-to-build-and-execute-a-docker-image-in-a-jetson-for-ai-and-image-processing) section**
+
+### List running containers :
+`docker container ls`
+
+### Launch shell inside of container :
+1. Copy the container id found with `docker container ls`
+2. `docker exec -it [container-id] bash`
+
+### Print container logs :
+`docker container logs [container-id] --follow`
+
+<br/>
+
 ## April tags coordinates and rotation matrix
 
 From the `Layout marking diagram` pdf:
