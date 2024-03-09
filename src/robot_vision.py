@@ -1,4 +1,5 @@
 import argparse
+from typing import Optional
 import apriltag
 import numpy as np
 import threading
@@ -8,6 +9,7 @@ import queue
 import signal
 import cv2
 from april_tags import euler
+from roboflow.infer import Roboflow2024
 
 #tag size in centimeters (16.51 centimeters, eg 6.5")
 TAG_SIZE = 16.51
@@ -20,6 +22,9 @@ def build_arg_parser():
 
     #do we want AprilTag
     parser.add_argument("--apriltag", dest='apriltag', action='store_true', help="enable apriltag detection")
+
+    #do we want AI object detection
+    parser.add_argument("--roboflow", dest='roboflow', action='store_true', help="enable ai object detection")
 
     #print detection results on the console
     parser.add_argument("-v", "--verbose", dest='verbose', action='store_true', help="Display detection results on the console")
@@ -41,21 +46,6 @@ def build_arg_parser():
 
     #camera parameters as provided by the output of the calibrate_camera.py
     parser.add_argument("-c", "--config", dest='camera_config', default='camera.json', action='store', help="json file containing the camera parameters")
-
-    #needed when the ai is activated
-    parser.add_argument( "--onnx", type=str, help="ONNX model path",)
-
-    #speed up software starting as using precompile model
-    parser.add_argument( "--trt", type=str, default="", help="TensorRT engine file path",)
-
-    #use humand readable strings instead of index for object class
-    parser.add_argument( "--labels", type=str, help="Labels file path",)
-
-    #to specify the model is in fp16
-    parser.add_argument( "--fp16", action="store_true", help="Float16 model datatype",)
-
-    #warmup inferece to prime the pump!
-    parser.add_argument( "--warmup", type=int, default=5, help="Model warmup",)
 
     parser.add_argument( "--record", type=str, default="/home/data/rec.mp4", help="Record file to specified location",)
 
@@ -151,8 +141,8 @@ def init_network_tables(args):
 ################################################################################
 def process_april_tag_detection( camera_params, detector, result, tag_info ):
 
-    # tag36h11. We can allow for some error correcting. Hamming <= 2
-    if result.tag_id in tag_info.keys() and result.hamming <= 2:
+    # tag36h11. We can allow for some error correcting. No hamming check
+    if result.tag_id in tag_info.keys():
 
         pose, _, _ = detector.detection_pose(result, camera_params['params'] )
 
@@ -279,19 +269,21 @@ def vision_processing(kwargs):
     tag_info = kwargs['tag_info']
     msg_q = kwargs['comm_msg_q']
 
-    # ai_model = kwargs['model']
+    run_ai = kwargs['roboflow']
+    model: Optional[Roboflow2024] = None
 
     dist_coeffs = np.array(camera_params['dist'])
     fc = camera_params['params']
     camera_matrix = np.array([fc[0],0, fc[2], 0, fc[1], fc[3], 0, 0, 1]).reshape((3,3))
-
-    precision = "float16" if args.fp16 else "float32"
 
     options = apriltag.DetectorOptions( families='tag36h11',
                                         debug=False,
                                         refine_decode=True,
                                         refine_pose=True)
     detector = apriltag.Detector(options)
+
+    if run_ai:
+        model = Roboflow2024()
 
     if args.record:
         video_out = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),15, (args.width,args.height))
@@ -302,6 +294,12 @@ def vision_processing(kwargs):
 
         #if we have a good frame from the camera
         if ret:
+            if model is not None:
+                note_coords = model.infer(frame, "note")
+                if note_coords is not None:
+                    print(f"note detected with normalized coords: {note_coords}")
+                    msg_q.put({'note': note_coords})
+
             if args.apriltag:
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
                 if angles is not None:
@@ -363,6 +361,8 @@ def main():
 
     if args.apriltag:
         kwargs['tag_info'],kwargs['camera_params'] = init_april_tag(args)
+
+    kwargs['roboflow'] = args.roboflow
 
     kwargs['camera'] = setup_capture(args.device, args.width, args.height)
 
