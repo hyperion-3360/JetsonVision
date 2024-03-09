@@ -306,8 +306,15 @@ def vision_processing(kwargs):
                     print(f"pos: {pos}")
                     print(f"anglkes: {angles}")
                 if pos is not None:
-                    msg_q.put({'april_tag':(pos, angles)})
-
+                    msg_q.put(
+                        {
+                            'april_tag':
+                                {
+                                    'ids': [tag_info[tag[1]]['ID'] for tag in tag_detections],
+                                    'position': (pos, angles)
+                                }
+                        }
+                    )
 
             if args.apriltag:
                 draw_april_tags(frame, tag_detections)
