@@ -1,3 +1,18 @@
+## USB camera order and the joys of using Nvidia Jetson
+
+Shall you ever want to be able to reliably assign cameras with a given jetson USB port, you should definitely read this section. The default implementation of video4linux doesn't care about the USB port assignation. It means using cv2.VideoCapture(0) will get you the first detected camera by v4l but there is no guarantee it will be the same camera every boot...!!! The only way to garantee that is (no not using /dev/videoxxx as this too can change every boot) but rather use you good friend (sarcasm...) udev.
+
+Copy the file 99-cameras.rules from this repository to the /etc/udev/rules.d/ and restart udev using :
+sudo udevadm control --reload-rules && udevadm trigger
+
+to get the specifics of each of your camera port use the following command:
+
+udevadm info --name=/dev/video0 --attribute-walk
+
+the important field is the KERNEL one
+
+the rule file included in this repos is for 2 Microsoft life HD3000 mapping them to /dev/front and /dev/back
+
 ## Docker compose
 
 ### Start and (re)build the docker containers

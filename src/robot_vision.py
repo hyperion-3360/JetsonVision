@@ -9,7 +9,7 @@ import queue
 import signal
 import cv2
 from april_tags import euler
-from roboflow.infer import Roboflow2024
+#from roboflow.infer import Roboflow2024
 
 #tag size in centimeters (16.51 centimeters, eg 6.5")
 TAG_SIZE = 16.51
@@ -33,7 +33,7 @@ def build_arg_parser():
     parser.add_argument("-i", "--ip", dest='rio_ip', type=str, default="10.33.60.2", help="RIO IP address")
 
     #device from which to acquire
-    parser.add_argument("device", type=int, action='store', help="device to capture from" )
+    parser.add_argument("device", type=str, action='store', help="device to capture from" )
 
     #frame width to acquire
     parser.add_argument("-w", "--width", type=int, default=640, dest='width', action='store', help="capture width from camera")
@@ -100,7 +100,7 @@ def communication_thread(message_q):
 
         if notified[0] and table is None:
             print("Connected!")
-            table = NetworkTables.getTable("SmartDashboard")
+            table = NetworkTables.getTable("Vision")
 
         item = message_q.get()
 
@@ -108,19 +108,22 @@ def communication_thread(message_q):
             if item['command'] == 'stop':
                 break
 
-        elif 'april_tag' in item:
-            pos, rot = item['april_tag']
-            print("Position: {}, rotation: {}".format(pos, rot))
-            if table:
+        else:
+            if 'april_tag' in item and table:
+                pos,rot = item['april_tag']['position']
+                print("Position: {}, rotation: {}".format(pos, rot))
+                ids = item['april_tag']['ids']
                 table.putNumberArray("position", pos )
                 table.putNumberArray("rotation", rot )
+                table.putNumberArray("ids", ids )
 
-        elif 'detection' in item:
-            pred = item['detection']
-            c, s, x1, y1, x2, y2  = pred
-            print( "Detection of {} @ x1: {} y1: {} x2: {} y2: {} with confidence: {}".format(c, x1, y1, x2, y2, s))
-            if table:
+            if 'detection' in item and table:
+                pred = item['detection']
+                c, s, x1, y1, x2, y2  = pred
+                print( "Detection of {} @ x1: {} y1: {} x2: {} y2: {} with confidence: {}".format(c, x1, y1, x2, y2, s))
                 table.putStringArray('detection', [c,str(s),str(x1),str(y1),str(x2),str(y2)])
+
+
 
 ################################################################################
 # Initialize the network table and communication subsystem
@@ -304,7 +307,7 @@ def vision_processing(kwargs):
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
                 if angles is not None:
                     print(f"pos: {pos}")
-                    print(f"anglkes: {angles}")
+                    print(f"angles: {angles}")
                 if pos is not None:
                     msg_q.put(
                         {
