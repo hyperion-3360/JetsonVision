@@ -303,6 +303,7 @@ def vision_processing(kwargs):
             if model is not None:
                 note_coords = model.infer(frame, "note")
                 if note_coords is not None:
+                    print(f'Note coords: {note_coords}')
                     msg_q.put({'note': note_coords})
 
             if args.apriltag:
