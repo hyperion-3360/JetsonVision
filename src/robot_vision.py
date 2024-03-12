@@ -9,7 +9,7 @@ import queue
 import signal
 import cv2
 from april_tags import euler
-#from roboflow.infer import Roboflow2024
+from roboflow.infer import Roboflow2024
 
 #tag size in centimeters (16.51 centimeters, eg 6.5")
 TAG_SIZE = 16.51
@@ -117,12 +117,15 @@ def communication_thread(message_q):
                 table.putNumberArray("rotation", rot )
                 table.putNumberArray("ids", ids )
 
+            if 'note' in item and table:
+                print(f"Detection of note at normalized coordinates {item['note']} in the camera fov")
+                table.putNumberArray("note", item['note'])
+
             if 'detection' in item and table:
                 pred = item['detection']
                 c, s, x1, y1, x2, y2  = pred
                 print( "Detection of {} @ x1: {} y1: {} x2: {} y2: {} with confidence: {}".format(c, x1, y1, x2, y2, s))
                 table.putStringArray('detection', [c,str(s),str(x1),str(y1),str(x2),str(y2)])
-
 
 
 ################################################################################
@@ -300,7 +303,6 @@ def vision_processing(kwargs):
             if model is not None:
                 note_coords = model.infer(frame, "note")
                 if note_coords is not None:
-                    print(f"note detected with normalized coords: {note_coords}")
                     msg_q.put({'note': note_coords})
 
             if args.apriltag:

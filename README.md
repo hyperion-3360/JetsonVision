@@ -15,6 +15,9 @@ the rule file included in this repos is for 2 Microsoft life HD3000 mapping them
 
 ## Docker compose
 
+### Build the docker images
+`docker-compose build`
+
 ### Start and (re)build the docker containers
 `-d` sends the process in the background and automatically restarts the containers when the device boots up
 

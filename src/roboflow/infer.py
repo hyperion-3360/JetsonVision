@@ -17,7 +17,7 @@ class Roboflow2024:
         self.model_id = model_id
 
     @staticmethod
-    def _encode(image: np.ndarray[float]):
+    def _encode(image: np.ndarray):
         image = Image.fromarray(np.uint8(image)).convert('RGB')
 
         buffered = BytesIO()
@@ -51,7 +51,7 @@ class Roboflow2024:
         return (note['x'] / w, note['y'] / h)
 
 
-    def infer(self, image: np.ndarray[float], model_class="note"):
+    def infer(self, image: np.ndarray, model_class="note"):
         """
         Run inference on an image and return the biggest bounding box center of the wanted class
         with normalized coordinates relative to the top-left corner of the image
@@ -65,9 +65,9 @@ class Roboflow2024:
                             params=Roboflow2024.params,
                             headers=Roboflow2024.headers,
                             data=data
-                        )
+                        ).json()
 
-            note = Roboflow2024._parse(response.json(), model_class)
+            note = Roboflow2024._parse(response, model_class)
 
             if note is None:
                 return None
