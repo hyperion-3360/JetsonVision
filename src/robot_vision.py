@@ -427,6 +427,7 @@ def main():
     kwargs['roboflow'] = args.roboflow
 
     kwargs['camera'] = [setup_capture(device, args.width, args.height) for device in args.device]
+    assert len(kwargs['camera']) == len(kwargs['camera_params']), "Number of camera devices does not match number of camera param files"
 
     comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
 
