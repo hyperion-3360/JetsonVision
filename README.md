@@ -1,3 +1,33 @@
+## Setup offline jetson with multiple cameras
+ip address of jetson nano on robot: 10.33.60.68 (might be different)
+
+1. Clone and pull the JetsonVision `git clone git@github.com:hyperion-3360/JetsonVision.git`
+2. Navigate into the git: `cd JetsonVision`
+3. Copy files to jetson via scp: `scp -r . aaeon@10.33.60.68:~/Documents/FRC2024/JetsonVision/`
+4. ssh into the jetson `ssh aaeon@10.33.60.68`
+5. Build the vision image with docker compose `docker-compose build vision-srv`
+6. Launch the containers `docker-compose up -d`
+7. The april tags and ai data should appear in smartdashboard (network tables tab)
+
+**Possible issues:**
+- If april tags are not easily recognized, the calibration file might be incorrect. Edit the command in docker-compose.yml and relaunch the containers with `docker-compose down` and the `docker-compose up -d`. Maybe a docker compose restart is possible. Needs to be investigated
+- Multiple camera usage is possible. Line `16` in `docker-compose.yml` can be edited to add more devices and more camera calibration files. The first device is used for AI inference. All cameras are used for April tags recognition
+
+```
+16: command: sh -c "python3 robot_vision.py /dev/front --apriltag --roboflow -e env.json -c camera2.json --width 1280 --height 720"
+
+# Can be changed for
+python3 robot_vision.py /dev/front /dev/back --roboflow -e env.json -c camera2.json camera4.json --width 1280 --height 720
+
+# notice the added device and added camera calibration file...
+```
+
+
+- On reboot, roboflow seems to need an initial internet connexion ??? Might not want to run inference...
+
+**TODO:**
+- Re-calibrate the cameras on the robot
+
 ## USB camera order and the joys of using Nvidia Jetson
 
 Shall you ever want to be able to reliably assign cameras with a given jetson USB port, you should definitely read this section. The default implementation of video4linux doesn't care about the USB port assignation. It means using cv2.VideoCapture(0) will get you the first detected camera by v4l but there is no guarantee it will be the same camera every boot...!!! The only way to garantee that is (no not using /dev/videoxxx as this too can change every boot) but rather use you good friend (sarcasm...) udev.
