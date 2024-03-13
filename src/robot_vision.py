@@ -33,7 +33,10 @@ def build_arg_parser():
     parser.add_argument("-i", "--ip", dest='rio_ip', type=str, default="10.33.60.2", help="RIO IP address")
 
     #device from which to acquire
-    parser.add_argument("device", type=str, action='store', help="device to capture from" )
+    parser.add_argument("device", type=str, action='store', help="device(s) to capture from. If multiple are given, they must all be of the same resolution", nargs='+')
+
+    #camera parameters as provided by the output of the calibrate_camera.py
+    parser.add_argument("-c", "--config", dest='camera_config', nargs='+', default=['camera.json'], action='store', help="json file(s) containing the camera parameters")
 
     #frame width to acquire
     parser.add_argument("-w", "--width", type=int, default=640, dest='width', action='store', help="capture width from camera")
@@ -44,9 +47,7 @@ def build_arg_parser():
     #the game layout of AprilTags in json format
     parser.add_argument("-e", "--environment", dest='environment', default='env.json', action='store', help="json file containing the details of the AprilTags env")
 
-    #camera parameters as provided by the output of the calibrate_camera.py
-    parser.add_argument("-c", "--config", dest='camera_config', default='camera.json', action='store', help="json file containing the camera parameters")
-
+    #record
     parser.add_argument( "--record", type=str, default="/home/data/rec.mp4", help="Record file to specified location",)
 
     return parser
@@ -58,16 +59,17 @@ def build_arg_parser():
 ################################################################################
 def init_april_tag(args):
     tag_info = dict()
-    camera_params = dict()
+    camera_params = []
 
     #let's load the environment
     with open(args.environment, 'r') as f:
         env_json = json.load(f)
         tag_info = {x['ID']: x for x in env_json['tags']}
 
-    with open(args.camera_config, 'r') as f:
-        cam_json = json.load(f)
-        camera_params = {'params' : [ cam_json[x] for x in ('fx', 'fy', 'cx', 'cy')], 'dist' : cam_json['dist']}
+    for config in args.camera_config:
+        with open(config, 'r') as f:
+            cam_json = json.load(f)
+            camera_params.append({'params' : [ cam_json[x] for x in ('fx', 'fy', 'cx', 'cy')], 'dist' : cam_json['dist']})
 
     return tag_info, camera_params
 
@@ -270,17 +272,16 @@ def draw_object_detections(frame, predictions):
 ################################################################################
 def vision_processing(kwargs):
     args = kwargs['args']
-    cap = kwargs['camera']
-    camera_params = kwargs['camera_params']
-    tag_info = kwargs['tag_info']
-    msg_q = kwargs['comm_msg_q']
 
-    run_ai = kwargs['roboflow']
-    model: Optional[Roboflow2024] = None
-
-    dist_coeffs = np.array(camera_params['dist'])
-    fc = camera_params['params']
-    camera_matrix = np.array([fc[0],0, fc[2], 0, fc[1], fc[3], 0, 0, 1]).reshape((3,3))
+    cameras = kwargs['camera']
+    camera_params = [
+                        {
+                            'params': params,
+                            'dist': np.asarray(params['dist']),
+                            'matrix': np.array([params['params'][0],0, params['params'][2], 0, params['params'][1], params['params'][3], 0, 0, 1]).reshape((3,3))
+                        }
+                        for params in kwargs['camera_params']
+                    ]
 
     options = apriltag.DetectorOptions( families='tag36h11',
                                         debug=False,
@@ -288,59 +289,106 @@ def vision_processing(kwargs):
                                         refine_pose=True)
     detector = apriltag.Detector(options)
 
+    tag_info = kwargs['tag_info']
+    msg_q = kwargs['comm_msg_q']
+
+    run_ai = kwargs['roboflow']
+    model: Optional[Roboflow2024] = None
+
     if run_ai:
         model = Roboflow2024()
 
     if args.record:
-        video_out = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),15, (args.width,args.height))
+        video_out = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 15, (args.width,args.height))
 
-    while( cap.isOpened() and not kwargs['quit'] ):
-        #read a frame
-        ret, frame = cap.read()
-
-        #if we have a good frame from the camera
-        if ret:
-            if model is not None:
-                model.infer_async(
-                    frame,
-                    lambda note_coords: msg_q.put({'note': note_coords if note_coords is not None else (-1,-1)}),
-                    "note"
-                )
-
+    while not kwargs['quit']: # We assume all video captures are open... Either way, cap.read() will fail if the capture isn't open and we can handle the error there
+        april_tags = []
+        frames = []
+        for i, cap in enumerate(cameras):
             if args.apriltag:
-                pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
-                if angles is not None:
-                    print(f"pos: {pos}")
-                    print(f"angles: {angles}")
+                params = camera_params[i]
+                frame, pos, angs, tags = run_april_tags_detection(cap, detector, tag_info, params['params'], params['dist'], params['matrix'])
                 if pos is not None:
-                    msg_q.put(
+                    april_tags.append({'pos': pos, 'angles': angs, 'tags': tags})
+            else:
+                r, frame = cap.read()
+                if not r:
+                    continue
+
+            frames.append(frame)
+
+
+        if model is not None:
+            model.infer_async( # USING FIRST CAMERA FOR AI
+                frames[0],
+                lambda note_coords: msg_q.put({'note': note_coords if note_coords is not None else (-1,-1)}),
+                "note"
+            )
+
+        if args.apriltag and len(april_tags) > 0:
+            detected_tags = []
+            pos = angles = np.zeros((len(april_tags), 3))
+
+            for i, detection in enumerate(april_tags):
+                detected_tags += [tag_info[tag[1]]['ID'] for tag in detection['tags']]
+                pos[i, :] = detection['pos']
+                angles[i, :] = detection['angles']
+
+                draw_april_tags(frame, detection['tags'])
+
+            # average position and angle
+            pos = np.mean(pos, axis=0)
+            angles = np.mean(angles, axis=0)
+
+            print(f"pos: {pos}")
+            print(f"angles: {angles}")
+            print(f"IDs: {detected_tags}")
+
+            msg_q.put(
+                {
+                    'april_tag':
                         {
-                            'april_tag':
-                                {
-                                    'ids': [tag_info[tag[1]]['ID'] for tag in tag_detections],
-                                    'position': (pos, angles)
-                                }
+                            'ids': detected_tags,
+                            'position': (pos, angles)
                         }
-                    )
+                }
+            )
 
-            if args.apriltag:
-                draw_april_tags(frame, tag_detections)
+        if args.gui:
+            # show the output image after AprilTag detection
+            # default to the first camera
+            cv2.imshow("Image", frame)
+            cv2.waitKey(1)
 
-            if args.gui:
-                # show the output image after AprilTag detection
-                cv2.imshow("Image", frame)
-                cv2.waitKey(1)
-
-            if args.record:
-                video_out.write(frame)
+        if args.record:
+            video_out.write(frame)
 
     if args.record:
         video_out.release()
+
+    if model is not None:
+        model.shutdown()
 
     if args.gui:
         cv2.destroyAllWindows()
 
     msg_q.put({'command':'stop'})
+
+
+def run_april_tags_detection(cap, detector, tag_info, camera_params, dist_coeffs, camera_matrix):
+    pos = angles = tag_detections = None
+
+    #read a frame
+    ret, frame = cap.read()
+
+    #if we have a good frame from the camera
+    if ret:
+        pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
+        if pos is not None:
+            print(f"with tags {tag_detections}:\n\tpos: {pos}\n\tangles: {angles}")
+
+    return frame if ret else None, pos, angles, tag_detections
+
 
 ################################################################################
 # setup the camera capture parameter, this version is a simple convenience
@@ -378,7 +426,7 @@ def main():
 
     kwargs['roboflow'] = args.roboflow
 
-    kwargs['camera'] = setup_capture(args.device, args.width, args.height)
+    kwargs['camera'] = [setup_capture(device, args.width, args.height) for device in args.device]
 
     comm_thread, kwargs['comm_msg_q'] = init_network_tables(args)
 
@@ -389,8 +437,9 @@ def main():
 
     comm_thread.join()
 
-    if kwargs['camera'] is not None and kwargs['camera'].isOpened():
-        kwargs['camera'].release()
+    for camera in kwargs['camera'] or []:
+        if camera.isOpened():
+            camera.release()
 
 #--------------------------------------------------------------------------------
 if __name__ == "__main__":
