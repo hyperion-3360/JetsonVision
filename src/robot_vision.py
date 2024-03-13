@@ -301,10 +301,11 @@ def vision_processing(kwargs):
         #if we have a good frame from the camera
         if ret:
             if model is not None:
-                note_coords = model.infer(frame, "note")
-                if note_coords is not None:
-                    print(f'Note coords: {note_coords}')
-                    msg_q.put({'note': note_coords})
+                model.infer_async(
+                    frame,
+                    lambda note_coords: msg_q.put({'note': note_coords if note_coords is not None else (-1,-1)}),
+                    "note"
+                )
 
             if args.apriltag:
                 pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
