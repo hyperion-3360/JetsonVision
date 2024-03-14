@@ -115,13 +115,11 @@ def communication_thread(message_q):
                 pos,rot = item['april_tag']['position']
                 print("Position: {}, rotation: {}".format(pos, rot))
                 ids = item['april_tag']['ids']
-                table.putNumberArray("position", pos )
-                table.putNumberArray("rotation", rot )
-                table.putNumberArray("ids", ids )
+                table.putNumberArray("AprilTags", pos + rot + ids)
 
             if 'note' in item and table:
                 print(f"Detection of note at normalized coordinates {item['note']} in the camera fov")
-                table.putNumberArray("note", item['note'])
+                table.putNumberArray("Note", item['note'])
 
             if 'detection' in item and table:
                 pred = item['detection']
@@ -301,27 +299,35 @@ def vision_processing(kwargs):
     if args.record:
         video_out = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), 15, (args.width,args.height))
 
+    fc = -1
     while not kwargs['quit']: # We assume all video captures are open... Either way, cap.read() will fail if the capture isn't open and we can handle the error there
+        fc += 1 # frame counter
+
         april_tags = []
-        frames = []
+        frame = None # only use the first camera's frame for gui and inference
+
         for i, cap in enumerate(cameras):
             if args.apriltag:
                 params = camera_params[i]
-                frame, pos, angs, tags = run_april_tags_detection(cap, detector, tag_info, params['params'], params['dist'], params['matrix'])
+                f, pos, angs, tags = run_april_tags_detection(cap, detector, tag_info, params['params'], params['dist'], params['matrix'])
                 if pos is not None:
                     april_tags.append({'pos': pos, 'angles': angs, 'tags': tags})
             else:
-                r, frame = cap.read()
+                r, f = cap.read()
                 if not r:
                     continue
 
-            frames.append(frame)
+            if frame is None:
+                frame = f
 
+        def publish_note(note_coords, msg_q):
+                if note_coords:
+                    msg_q.put({'note': note_coords})
 
-        if model is not None:
+        if model is not None and (fc % 10) == 0: # Infer once every 10 frames...
             model.infer_async( # USING FIRST CAMERA FOR AI
-                frames[0],
-                lambda note_coords: msg_q.put({'note': note_coords if note_coords is not None else (-1,-1)}),
+                frame.copy(),
+                lambda note: publish_note(note, msg_q),
                 "note"
             )
 

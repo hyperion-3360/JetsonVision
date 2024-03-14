@@ -25,12 +25,11 @@ class Roboflow2024:
         self.model_id = model_id
 
         # TODO: with multiple threads, do we risk having an inference complete before an earlier request ?
-        self._req_pool = ThreadPool(processes=8) if pool else None
+        self._req_pool = ThreadPool(processes=1) if pool else None
 
     def shutdown(self):
         print("Shutting down ai requests")
-        self._req_pool.close()
-        self._req_pool.join()
+        self._req_pool.terminate()
 
     @staticmethod
     def _encode(image: np.ndarray):
