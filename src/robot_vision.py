@@ -333,7 +333,8 @@ def vision_processing(kwargs):
 
         if args.apriltag and len(april_tags) > 0:
             detected_tags = []
-            pos = angles = np.zeros((len(april_tags), 3))
+            pos = np.zeros((len(april_tags), 3))
+            angles = np.zeros((len(april_tags), 3))
 
             for i, detection in enumerate(april_tags):
                 detected_tags += [tag_info[tag[1]]['ID'] for tag in detection['tags']]
@@ -382,7 +383,9 @@ def vision_processing(kwargs):
 
 
 def run_april_tags_detection(cap, detector, tag_info, camera_params, dist_coeffs, camera_matrix):
-    pos = angles = tag_detections = None
+    pos = None
+    angles = None
+    tag_detections = None
 
     #read a frame
     ret, frame = cap.read()
