@@ -29,7 +29,8 @@ class Roboflow2024:
 
     def shutdown(self):
         print("Shutting down ai requests")
-        self._req_pool.terminate()
+        if self._req_pool is not None:
+            self._req_pool.terminate()
 
     @staticmethod
     def _encode(image: np.ndarray):
