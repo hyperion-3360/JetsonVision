@@ -115,7 +115,7 @@ def communication_thread(message_q):
                 pos,rot = item['april_tag']['position']
                 print("Position: {}, rotation: {}".format(pos, rot))
                 ids = item['april_tag']['ids']
-                table.putNumberArray("AprilTags", pos + rot + ids)
+                table.putNumberArray("AprilTags", [*pos, *rot, *ids])
 
             if 'note' in item and table:
                 print(f"Detection of note at normalized coordinates {item['note']} in the camera fov")
