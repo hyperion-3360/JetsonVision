@@ -112,10 +112,10 @@ def communication_thread(message_q):
 
         else:
             if 'april_tag' in item and table:
-                pos,rot = item['april_tag']['position']
+                pos,rot,tagang = item['april_tag']['position']
                 print("Position: {}, rotation: {}".format(pos, rot))
                 ids = item['april_tag']['ids']
-                table.putNumberArray("AprilTags", [*pos, *rot, *ids])
+                table.putNumberArray("AprilTags", [*pos, *rot, *tagang, *ids])
 
             if 'note' in item and table:
                 print(f"Detection of note at normalized coordinates {item['note']} in the camera fov")
@@ -175,10 +175,13 @@ def process_april_tag_detection( camera_params, detector, result, tag_info ):
 
             # TODO: investigue if that costly inversion could be replaced by a simple transpose
             tag_relative_camera_pose = np.linalg.inv(estimated_pose)
-
             global_position = np.matmul(tag_pose, tag_relative_camera_pose)[0:3,3]
 
-            return global_position, angles
+            # calculate the robot's rotation in the field
+            tag_world_rot = tag_dict['pose']['world_rotation']
+            robot_rot = euler.rotation_angles(np.matmul(pose[:3, :3], tag_world_rot), 'xyz')
+
+            return global_position, robot_rot, angles
 
     return None
 
@@ -207,15 +210,18 @@ def compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params
     if estimated_poses:
         total_pos = np.zeros(3,)
         total_euler = np.zeros(3,)
+        total_rot = np.zeros(3,)
 
         # compute average to increase precision and stability
-        for position, angles in estimated_poses:
+        for position, robot_rot, angles in estimated_poses:
             total_pos += position
             total_euler += angles
+            total_rot += robot_rot
 
-        return total_pos / len(estimated_poses), total_euler / len(estimated_poses), results
+        nb_tags = len(estimated_poses)
+        return total_pos / nb_tags, total_rot / nb_tags, total_euler / nb_tags, results
 
-    return None, None, []
+    return None, None, None, []
 
 ################################################################################
 # Draw april tags
@@ -309,9 +315,9 @@ def vision_processing(kwargs):
         for i, cap in enumerate(cameras):
             if args.apriltag:
                 params = camera_params[i]
-                f, pos, angs, tags = run_april_tags_detection(cap, detector, tag_info, params['params'], params['dist'], params['matrix'])
+                f, pos, rot, angs, tags = run_april_tags_detection(cap, detector, tag_info, params['params'], params['dist'], params['matrix'])
                 if pos is not None:
-                    april_tags.append({'pos': pos, 'angles': angs, 'tags': tags})
+                    april_tags.append({'pos': pos, 'rot': rot, 'angles': angs, 'tags': tags})
             else:
                 r, f = cap.read()
                 if not r:
@@ -334,20 +340,24 @@ def vision_processing(kwargs):
         if args.apriltag and len(april_tags) > 0:
             detected_tags = []
             pos = np.zeros((len(april_tags), 3))
-            angles = np.zeros((len(april_tags), 3))
+            rot = np.zeros((len(april_tags), 3)) # robot rotation in world
+            angles = np.zeros((len(april_tags), 3)) #  angles vis-a-vis april tag
 
             for i, detection in enumerate(april_tags):
                 detected_tags += [tag_info[tag[1]]['ID'] for tag in detection['tags']]
                 pos[i, :] = detection['pos']
+                rot[i, :] = detection['rot']
                 angles[i, :] = detection['angles']
 
                 draw_april_tags(frame, detection['tags'])
 
-            # average position and angle
+            # average position, rotation and angle (vis-a-vis tag)
             pos = np.mean(pos, axis=0)
+            rot = np.mean(rot, axis=0)
             angles = np.mean(angles, axis=0)
 
             print(f"pos: {pos}")
+            print(f"rot: {rot}")
             print(f"angles: {angles}")
             print(f"IDs: {detected_tags}")
 
@@ -356,7 +366,7 @@ def vision_processing(kwargs):
                     'april_tag':
                         {
                             'ids': detected_tags,
-                            'position': (pos, angles)
+                            'position': (pos, rot, angles)
                         }
                 }
             )
@@ -385,6 +395,7 @@ def vision_processing(kwargs):
 def run_april_tags_detection(cap, detector, tag_info, camera_params, dist_coeffs, camera_matrix):
     pos = None
     angles = None
+    robot_rot = None
     tag_detections = None
 
     #read a frame
@@ -392,11 +403,11 @@ def run_april_tags_detection(cap, detector, tag_info, camera_params, dist_coeffs
 
     #if we have a good frame from the camera
     if ret:
-        pos, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
+        pos, robot_rot, angles, tag_detections = compute_position( frame, detector, camera_matrix, dist_coeffs, camera_params, tag_info )
         if pos is not None:
-            print(f"with tags {tag_detections}:\n\tpos: {pos}\n\tangles: {angles}")
+            print(f"with tags {tag_detections}:\n\tpos: {pos}\n\trobot rotation: {robot_rot}\n\tangles vis-a-vis tag: {angles}")
 
-    return frame if ret else None, pos, angles, tag_detections
+    return frame if ret else None, pos, robot_rot, angles, tag_detections
 
 
 ################################################################################

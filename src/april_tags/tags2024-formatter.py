@@ -29,9 +29,9 @@ for tag in data.split(';'):
 
   tag_data = {"pose": {"translation": {}, "rotation": {}}}
   tag_data[id['k'].upper().strip()] = int(id['v'])
-  tag_data['pose']['translation'][x['k'].strip()] = x['v']*2.54
-  tag_data['pose']['translation'][y['k'].strip()] = y['v']*2.54
-  tag_data['pose']['translation'][z['k'].strip()] = z['v']*2.54
+  tag_data['pose']['translation'][x['k'].strip()] = np.around(x['v']*2.54, 4)
+  tag_data['pose']['translation'][y['k'].strip()] = np.around(y['v']*2.54, 4)
+  tag_data['pose']['translation'][z['k'].strip()] = np.around(z['v']*2.54, 4)
 
   rad_z = ang_z['v'] / 180 * np.pi
 
@@ -46,6 +46,7 @@ for tag in data.split(';'):
   rot_in_cam = np.around(np.matmul(rot, camera_oriented_matrix), 4)
 
   tag_data['pose']['rotation'] = rot_in_cam.tolist()
+  tag_data['pose']['world_rotation'] = np.around(np.asarray(rot), 4).tolist()
 
   formatted.append(tag_data)
 
