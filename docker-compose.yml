@@ -7,13 +7,12 @@ services:
     volumes:
       - visionvolume:/home/data
     devices:
-      - /dev/front
       - /dev/back
     build:
       context: .
     env_file: ./.env
     restart: always
-    command: sh -c "python3 robot_vision.py v4l2:///dev/front v4l2:///dev/back --apriltag -e env.json -c camera-front.json camera-back.json --width 1280 --height 720"
+    command: sh -c "python3 robot_vision.py v4l2:///dev/back --apriltag -e env.json -c camera-back.json --width 1280 --height 720"
 
   # roboflow-srv:
   #   image: roboflow/roboflow-inference-server-jetson-5.1.1:latest
